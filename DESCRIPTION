@@ -14,4 +14,6 @@ LinkingTo:
     Rcpp,
     RcppEigen
 Imports: 
-    Rcpp
+    RcppEigen,
+    Rcpp,
+    RcppArmadillo
