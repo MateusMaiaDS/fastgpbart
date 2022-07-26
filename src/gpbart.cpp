@@ -19,6 +19,22 @@ using Eigen::Upper;
 
 
 //[[Rcpp::export]]
+Eigen::MatrixXd matrix_slice(Eigen::MatrixXd &x,
+                             vector<int> &indexes){
+
+  // Creating a matrix with the same dimensions of the x
+  Eigen::MatrixXd slice_matrix(indexes.size(),x.cols());
+
+  // Setting the new matrix elements
+  for(int i=0;i<indexes.size();i++){
+    slice_matrix.row(i) = x.row(indexes[i]);
+  }
+
+  return slice_matrix;
+
+}
+
+//[[Rcpp::export]]
 int initialize_test(Eigen::MatrixXd x_train,Eigen::MatrixXd x_test,
                     Eigen::VectorXd residuals,
                     double phi, double nu,
@@ -36,11 +52,11 @@ int initialize_test(Eigen::MatrixXd x_train,Eigen::MatrixXd x_test,
   n_obs_train = x_train.rows();
   n_obs_test = x_test.rows();
 
-  gpb_Tree tree_example(n_obs_train,n_obs_test,i_omega,i_omega_plus_tau,i_omega_plus_tau_inv);
+  // gpb_Tree tree_example(n_obs_train,n_obs_test,i_omega,i_omega_plus_tau,i_omega_plus_tau_inv);
 
   // tree_example.DisplayNodes();
 
-  tree_example.list_node[0].prev_omega_plus_tau_inv();
+  // tree_example.list_node[0].prev_omega_plus_tau_inv();
   return 0;
 
 }
@@ -182,183 +198,13 @@ int initialize_test(Eigen::MatrixXd x_train,Eigen::MatrixXd x_test,
 //
 // }
 
-//======== GP-BART FUNCTIONS============
-// //[[Rcpp::export]]
-// List gpbart(Eigen::MatrixXd x_train,
-//           Eigen::VectorXd y,
-//           Eigen::MatrixXd x_test,
-//           int n_tree,
-//           int n_mcmc,
-//           int n_burn,
-//           int n_min_size,
-//           double tau, double mu,
-//           double tau_mu, double naive_sigma,
-//           double alpha, double beta){
-//
-//   // Defining the parameters from GP-BART
-//   // GP-BART functions
-//   vector<double> phi_vec;
-//   double phi_init;
-//   double nu;
-//   double kappa;
-//
-//   // Declaring common variables
-//   double verb;
-//   double acceptance;
-//   double log_transition_prob_obj;
-//   double past_tau;
-//   int post_counter = 0;
-//   int id_t ,verb_node_index; // Id_t: Boolean to verify if the same tree was generated
-//   // Verb_node_index: Explicit the node the was used;
-//
-//   // Getting the number of observations
-//   int n_train = x_train.rows();
-//   int n_test = x_test.rows();
-//
-//   // Creating the variables
-//   int n_post = (n_mcmc-n_burn);
-//   Eigen::MatrixXd y_train_hat_post(n_post,n_train);
-//   Eigen::MatrixXd y_test_hat_post(n_post,n_train);
-//
-//   NumericVector tau_post;
-//
-//   // Creating the initial values for omega, omega_plus_tau, and omega_plus_tau_inv
-//   // Defining initial values for omega matrices
-//   Eigen::MatrixXd i_omega,i_omega_plus_tau,i_omega_plus_tau_inv;
-//
-//
-//   // Defining the matrices for the root node
-//   i_omega = omega(x_train,phi_init,nu);
-//   i_omega_plus_tau = omega_plus_tau(x_train,phi_init,nu,tau);
-//   i_omega_plus_tau_inv = M_solve(i_omega_plus_tau);
-//
-//   // Initialize the new tree
-//   gpb_Tree new_tree(n_train,n_test,i_omega,i_omega_plus_tau,i_omega_plus_tau_inv);
-//
-//   // Creating a vector of multiple trees
-//   vector<gpb_Tree> current_trees;
-//   for(int i = 0; i<n_tree;i++){
-//     current_trees.push_back(new_tree);
-//   }
-//
-//
-//   // Creating a matrix of zeros of y_hat
-//   y_train_hat_post.setZero(n_post,n_train);
-//   y_test_hat_post.setZero(n_post,n_test);
-//
-//   // Creating the partial residuals and partial predictions
-//   Eigen::VectorXd partial_pred,partial_residuals;
-//   Eigen::VectorXd prediction_train,prediction_test; // Creating the vector only one prediction
-//   Eigen::VectorXd prediction_test_sum;
-//
-//   // Initializing zero values
-//   partial_pred.setZero(n_train);
-//   partial_residuals.setZero(n_train);
-//   prediction_train.setZero(n_train);
-//   prediction_test.setZero(n_test);
-//
-//
-//   // Iterating over all MCMC samples
-//   for(int i=0;i<n_mcmc;i++){
-//
-//     prediction_test_sum.setZero(n_test);
-//
-//
-//     // Iterating over the trees
-//     for(int t = 0; t<n_tree;t++){
-//
-//       // Initializing if store tree or not
-//       id_t = 0;
-//       // Updating the prediction tree and prediction test
-//       get_prediction_tree(current_trees[t],x_train,x_test,prediction_train,prediction_test);
-//
-//       // Updating the residuals
-//       partial_residuals = y - (partial_pred - prediction_train);
-//
-//       // Sampling a verb. In this case I will sample a double between 0 and 1
-//       // Grow: 0-0.3
-//       // Prune 0.3 - 0.6
-//       // Change: 0.6 - 1.0
-//       // Swap: Not in this current implementation
-//       verb = R::runif(0,1);
-//
-//       // Forcing the first trees to grow
-//       if(current_trees[t].list_node.size()==1 ){
-//         verb = 0.1;
-//       }
-//
-//       // Proposing a new tree
-//       if(verb<=0.28){
-//         new_tree = grow(current_trees[t], x_train,x_test, n_min_size,&id_t,&verb_node_index);
-//       } else if ( verb <= 0.56){
-//         if(current_trees[t].list_node.size()>1){
-//           new_tree = prune(current_trees[t],&id_t,&verb_node_index);
-//         }
-//       } else if (verb <= 1){
-//         new_tree = change(current_trees[t],x_train,x_test,n_min_size,&id_t,&verb_node_index);
-//       } else {
-//         // new_tree = swap(current_trees[t],x_train,x_test,n_min_size);
-//       }
-//
-//       // Calculating or not the likelihood (1 is for case where the trees are the same)
-//       if(id_t == 0){
-//
-//         // No new tree is proposed (Jump log calculations)
-//         if( (verb <=0.6) && (current_trees[t].list_node.size()==new_tree.list_node.size())){
-//           log_transition_prob_obj = 0;
-//         } else {
-//           log_transition_prob_obj = log_transition_prob(current_trees[t],new_tree,verb);
-//
-//         }
-//
-//         acceptance = tree_loglikelihood_verb(partial_residuals,new_tree,current_trees[t],verb,verb_node_index,tau, tau_mu) + tree_log_prior_verb(new_tree,current_trees[t],verb,alpha,beta)+ log_transition_prob_obj;
-//
-//         // Testing if will acceptance or not
-//         if( (acceptance > 0) || (acceptance > -R::rexp(1))){
-//           current_trees[t] = new_tree;
-//         }
-//
-//       } // End the test likelihood calculating for same trees
-//
-//       // Generating new \mu values for the accepted (or not tree)
-//       current_trees[t] = update_mu(partial_residuals,current_trees[t],tau,tau_mu);
-//
-//       // Updating the prediction train and prediction test with the sampled \mu values
-//       get_prediction_tree(current_trees[t],x_train,x_test,prediction_train,prediction_test);
-//
-//       partial_pred = y + prediction_train - partial_residuals;
-//       prediction_test_sum += prediction_test;
-//     }
-//
-//     // Updating tau
-//     past_tau = tau;
-//     tau = update_tau(y,partial_pred,naive_sigma,past_tau);
-//     // tau = update_tau_old(y,partial_pred,a_tau,d_tau);
-//
-//     // Updating the posterior matrix
-//     if(i>=n_burn){
-//       y_train_hat_post.row(post_counter) += partial_pred;
-//       y_test_hat_post.row(post_counter) += prediction_test_sum;
-//       //Updating tau
-//       tau_post.push_back(tau);
-//       post_counter++;
-//     }
-//
-//   }
-//
-//   return Rcpp::List::create(_["y_train_hat_post"] = y_train_hat_post,
-//                             _["y_test_hat_post"] = y_test_hat_post,
-//                             _["tau_post"] = tau_post);
-//
-// }
-
 
 //========== BART FUNCTIONS ==============
 
 
 
 // [[Rcpp::depends(RcppEigen)]]
-Tree grow(Tree curr_tree,
+Tree grow_bart(Tree curr_tree,
           Eigen::MatrixXd x_train,
           Eigen::MatrixXd x_test,
           int n_min_size,
@@ -490,7 +336,7 @@ Tree grow(Tree curr_tree,
 
 // Prune a tree
 // [[Rcpp::depends(RcppEigen)]]
-Tree prune(Tree curr_tree, int* id_t, int* verb_node_index){
+Tree prune_bart(Tree curr_tree, int* id_t, int* verb_node_index){
 
   // New list of nodes
   int n_nodes = curr_tree.list_node.size();
@@ -560,7 +406,7 @@ Tree prune(Tree curr_tree, int* id_t, int* verb_node_index){
 
 // Change a tree
 // [[Rcpp::depends(RcppEigen)]]
-Tree change(Tree curr_tree,
+Tree change_bart(Tree curr_tree,
             Eigen::MatrixXd x_train,
             Eigen::MatrixXd x_test,
             int n_min_size,
@@ -695,450 +541,9 @@ Tree change(Tree curr_tree,
 
 };
 
-// Get the verbs
-// Tree swap_old(Tree curr_tree,
-//           Eigen::MatrixXd x,
-//           int n_min_size){
-//
-//   // testing if there are at least enough terminal nodes
-//   int n_int = curr_tree.n_internal();
-//   int branch_counter;
-//   // Declaring important values and variables
-//   int n_nodes = curr_tree.list_node.size();
-//   int n;
-//
-//   int accept_new_tree = 0;
-//   Tree new_tree = curr_tree;
-//
-//
-//   // Getting observations that are on the left and the ones that are in the right
-//   vector<int> new_branch_left_index;
-//   vector<int> new_branch_right_index;
-//
-//   vector<int> new_leaf_left_index;
-//   vector<int> new_leaf_right_index;
-//
-//   vector<int> curr_branch_obs; // Observations that belong to that terminal node
-//   vector<int> curr_leaf_obs; // Observations that belong to that terminal node
-//
-//   // Returning if there are not enough internal nodes
-//   if(n_int<3){
-//     return curr_tree;
-//   }
-//
-//   // Getting the parents of terminal nodes (NOG)
-//   vector<node> swap_branches;
-//
-//   for(int i=0;i<n_nodes;i++){
-//     if(curr_tree.list_node[i].isTerminal()==0){
-//       if((curr_tree.list_node[curr_tree.list_node[i].left].isTerminal()==1) || (curr_tree.list_node[curr_tree.list_node[i].right].isTerminal()==1)){
-//         branch_counter = 0;
-//         // Checking if the left child-branch is a parent of non-terminal nodes
-//         if((curr_tree.list_node[curr_tree.list_node[curr_tree.list_node[i].left].left].isTerminal()==1) && (curr_tree.list_node[curr_tree.list_node[curr_tree.list_node[i].left].right].isTerminal()==1)){
-//           swap_branches.push_back(curr_tree.list_node[i]);
-//           branch_counter++;
-//         }
-//
-//         if ((curr_tree.list_node[curr_tree.list_node[curr_tree.list_node[i].right].left].isTerminal()==1) && (curr_tree.list_node[curr_tree.list_node[curr_tree.list_node[i].right].right].isTerminal()==1)){
-//           swap_branches.push_back(curr_tree.list_node[i]);
-//           branch_counter++;
-//         }
-//
-//
-//         // Getting all possible candidates to swap
-//         if(branch_counter==2){
-//           // cout << " BRANC COUNTER "<< branch_counter << endl;
-//           swap_branches.pop_back(); // Removing the branch node added twice
-//         }
-//       }
-//     }
-//   }
-//
-//   if(swap_branches.size()>2){
-//     return curr_tree;
-//   }
-//   // // Getting the possible number of parents to be swapped
-//   int n_swap = swap_branches.size();
-//   int swap_node = sample_int(n_swap);
-//   int child_swap_node_index = 0;
-//   double leaf_bottom_var;
-//   double leaf_bottom_rule;
-//
-//   double branch_bottom_var;
-//   double branch_bottom_rule;
-//
-//   // No internal with the proper conditions
-//   if(n_swap == 0){
-//     return curr_tree;
-//   }
-//
-//
-//   cout << " ====== " << endl;
-//   cout << "SWAP NODE: " << swap_branches[swap_node].index <<  endl;
-//   cout << " ====== " << endl;
-//
-//
-//   // Getting the values
-//   branch_bottom_var = curr_tree.list_node[swap_branches[swap_node].left].var;
-//   branch_bottom_rule = curr_tree.list_node[swap_branches[swap_node].left].var_split;
-//
-//
-//   // Get the child-branch
-//   if(curr_tree.list_node[swap_branches[swap_node].left].isTerminal()==1){
-//     child_swap_node_index = curr_tree.list_node[swap_branches[swap_node].right].index;
-//     leaf_bottom_var = curr_tree.list_node[curr_tree.list_node[swap_branches[swap_node].right].left].var;
-//     leaf_bottom_rule = curr_tree.list_node[curr_tree.list_node[swap_branches[swap_node].right].left].var_split;
-//
-//
-//   } else if(curr_tree.list_node[swap_branches[swap_node].right].isTerminal()==1){
-//     child_swap_node_index = curr_tree.list_node[swap_branches[swap_node].left].index;
-//     leaf_bottom_var = curr_tree.list_node[curr_tree.list_node[swap_branches[swap_node].left].left].var;
-//     leaf_bottom_rule = curr_tree.list_node[curr_tree.list_node[swap_branches[swap_node].left].left].var_split;
-//
-//   }
-//
-//   if(child_swap_node_index == 0 ){
-//     return curr_tree;
-//   }
-//
-//
-//   // Getting the values
-//   for(int l = 0;l<n_nodes;l++){
-//
-//     if(curr_tree.list_node[l].index == swap_branches[swap_node].index){
-//
-//
-//       curr_branch_obs = curr_tree.list_node[l].obs_train;
-//       n = curr_tree.list_node[l].obs_train.size();
-//
-//       for(int i=0;i<n;i++){
-//         if(x.coeff(curr_branch_obs[i],leaf_bottom_var)<=leaf_bottom_rule){
-//           new_branch_left_index.push_back(curr_branch_obs[i]);
-//         } else {
-//           new_branch_right_index.push_back(curr_branch_obs[i]);
-//         }
-//       }
-//
-//       if((new_branch_right_index.size()==0) || (new_branch_left_index.size()==0)){
-//         return curr_tree;
-//       }
-//
-//       // Certifying that I will have only nodes with enough observations
-//       if(new_branch_right_index.size()>=n_min_size && new_branch_left_index.size()>=n_min_size){
-//         new_tree.list_node[new_tree.list_node[l].left].var = leaf_bottom_var;
-//         new_tree.list_node[new_tree.list_node[l].left].var_split = leaf_bottom_rule;
-//         new_tree.list_node[new_tree.list_node[l].right].var = leaf_bottom_var;
-//         new_tree.list_node[new_tree.list_node[l].right].var_split = leaf_bottom_rule;
-//
-//         // Replacing the left and right index
-//         new_tree.list_node[new_tree.list_node[l].left].obs_train = new_branch_left_index;
-//         new_tree.list_node[new_tree.list_node[l].right].obs_train = new_branch_right_index;
-//
-//
-//         accept_new_tree++;
-//         // Cleaning the auxiliary vectors
-//
-//         // new_left_index.clear();
-//         // new_right_index.clear();
-//         // curr_obs.clear();
-//
-//       } else {
-//         // cout << "NO VALID TREE FIRST" <<  endl;
-//         return curr_tree; // Finish the VERB
-//       }
-//
-//       // Skipping for the bottom leaves nodes
-//     }
-//
-//   }
-//
-//   for(int l = 0; l<n_nodes;l++){
-//
-//     if(curr_tree.list_node[l].index==child_swap_node_index){
-//
-//       curr_leaf_obs = new_tree.list_node[l].obs_train;
-//       n = new_tree.list_node[l].obs_train.size();
-//
-//       for(int i=0;i<n;i++){
-//         if(x.coeff(curr_leaf_obs[i],branch_bottom_var)<=branch_bottom_rule){
-//           new_leaf_left_index.push_back(curr_leaf_obs[i]);
-//         } else {
-//           new_leaf_right_index.push_back(curr_leaf_obs[i]);
-//         }
-//       }
-//
-//       if(new_leaf_right_index.size()==0 || new_leaf_left_index.size()==0){
-//         return curr_tree;
-//       }
-//
-//       // Certifying that I will have only nodes with enough observations
-//       if(new_leaf_right_index.size()>=n_min_size && new_leaf_left_index.size()>=n_min_size){
-//         new_tree.list_node[new_tree.list_node[l].left].var = branch_bottom_var;
-//         new_tree.list_node[new_tree.list_node[l].left].var_split = branch_bottom_rule;
-//         new_tree.list_node[new_tree.list_node[l].right].var = branch_bottom_var;
-//         new_tree.list_node[new_tree.list_node[l].right].var_split = branch_bottom_rule;
-//
-//         // Replacing the left and right index
-//         new_tree.list_node[new_tree.list_node[l].left].obs_train = new_leaf_left_index;
-//         new_tree.list_node[new_tree.list_node[l].right].obs_train = new_leaf_right_index;
-//
-//         accept_new_tree++;
-//       } else {
-//         cout << "NO VALID TREE SECOND" <<  endl;
-//
-//         return curr_tree; // Finish the VERB
-//       }
-//
-//     }
-//   }
-//
-//   if(accept_new_tree==2){
-//     cout <<  "   " << endl;
-//     cout << " THE NODE WAS SWAPPPEED" << endl;
-//     cout <<  "   " << endl;
-//     return new_tree;
-//     // return curr_tree;
-//   } else {
-//     return curr_tree;
-//   }
-// }
-//
-//
-// // Get the verbs
-// Tree swap(Tree curr_tree,
-//            Eigen::MatrixXd x_train,
-//            Eigen::MatrixXd x_test,
-//            int n_min_size,
-//            int* id_t){
-//
-//   // testing if there are at least enough terminal nodes
-//   int n_int = curr_tree.n_internal();
-//   int branch_counter;
-//   // Declaring important values and variables
-//   int n_nodes = curr_tree.list_node.size();
-//   int n_train, n_test;
-//
-//   int accept_new_tree = 0;
-//   Tree new_tree = curr_tree;
-//
-//
-//   // Getting observations that are on the left and the ones that are in the right
-//   vector<int> new_branch_left_train_index;
-//   vector<int> new_branch_right_train_index;
-//   vector<int> new_branch_left_test_index;
-//   vector<int> new_branch_right_test_index;
-//
-//   vector<int> new_leaf_left_train_index;
-//   vector<int> new_leaf_right_train_index;
-//   vector<int> new_leaf_left_test_index;
-//   vector<int> new_leaf_right_test_index;
-//
-//   vector<int> curr_branch_obs_train; // Observations that belong to that terminal node
-//   vector<int> curr_leaf_obs_train; // Observations that belong to that terminal node
-//   vector<int> curr_branch_obs_test; // Observations that belong to that terminal node
-//   vector<int> curr_leaf_obs_test; // Observations that belong to that terminal node
-//
-//   // Returning if there are not enough internal nodes
-//   if(n_int<3){
-//     *id_t = 1;
-//     return curr_tree;
-//   }
-//
-//   // Getting the parents of terminal nodes (NOG)
-//   vector<node> swap_branches;
-//
-//   for(int i=0;i<n_nodes;i++){
-//     if(curr_tree.list_node[i].isTerminal()==0){
-//       if((curr_tree.list_node[curr_tree.list_node[i].left].isTerminal()==1) || (curr_tree.list_node[curr_tree.list_node[i].right].isTerminal()==1)){
-//         branch_counter = 0;
-//         // Checking if the left child-branch is a parent of non-terminal nodes
-//         if((curr_tree.list_node[curr_tree.list_node[curr_tree.list_node[i].left].left].isTerminal()==1) && (curr_tree.list_node[curr_tree.list_node[curr_tree.list_node[i].left].right].isTerminal()==1)){
-//           swap_branches.push_back(curr_tree.list_node[i]);
-//           branch_counter++;
-//         }
-//
-//         if ((curr_tree.list_node[curr_tree.list_node[curr_tree.list_node[i].right].left].isTerminal()==1) && (curr_tree.list_node[curr_tree.list_node[curr_tree.list_node[i].right].right].isTerminal()==1)){
-//           swap_branches.push_back(curr_tree.list_node[i]);
-//           branch_counter++;
-//         }
-//
-//
-//         // Getting all possible candidates to swap
-//         if(branch_counter==2){
-//           cout << " BRANC COUNTER "<< branch_counter << endl;
-//           swap_branches.pop_back(); // Removing the branch node added twice
-//         }
-//       }
-//     }
-//   }
-//
-//
-//   // // Getting the possible number of parents to be swapped
-//   int n_swap = swap_branches.size();
-//   int swap_node = sample_int(n_swap);
-//   int child_swap_node_index = 0;
-//   double leaf_bottom_var;
-//   double leaf_bottom_rule;
-//
-//   double branch_bottom_var;
-//   double branch_bottom_rule;
-//
-//   // No internal with the proper conditions
-//   if(n_swap == 0){
-//     *id_t = 1;
-//     return curr_tree;
-//   }
-//
-//
-//
-//   // Getting the values
-//   branch_bottom_var = curr_tree.list_node[swap_branches[swap_node].left].var;
-//   branch_bottom_rule = curr_tree.list_node[swap_branches[swap_node].left].var_split;
-//
-//
-//   // Get the child-branch
-//   if(curr_tree.list_node[swap_branches[swap_node].left].isTerminal()==1){
-//     child_swap_node_index = curr_tree.list_node[swap_branches[swap_node].right].index;
-//     leaf_bottom_var = curr_tree.list_node[curr_tree.list_node[swap_branches[swap_node].right].left].var;
-//     leaf_bottom_rule = curr_tree.list_node[curr_tree.list_node[swap_branches[swap_node].right].left].var_split;
-//
-//
-//   } else if(curr_tree.list_node[swap_branches[swap_node].right].isTerminal()==1){
-//     child_swap_node_index = curr_tree.list_node[swap_branches[swap_node].left].index;
-//     leaf_bottom_var = curr_tree.list_node[curr_tree.list_node[swap_branches[swap_node].left].left].var;
-//     leaf_bottom_rule = curr_tree.list_node[curr_tree.list_node[swap_branches[swap_node].left].left].var_split;
-//
-//   }
-//
-//   if(child_swap_node_index == 0 ){
-//     *id_t = 1;
-//     return curr_tree;
-//   }
-//
-//
-//   // Getting the values
-//   for(int l = 0;l<n_nodes;l++){
-//
-//     if(curr_tree.list_node[l].index == swap_branches[swap_node].index){
-//
-//       // Gathering training observations
-//       curr_branch_obs_train = curr_tree.list_node[l].obs_train;
-//       n_train = curr_tree.list_node[l].obs_train.size();
-//       // curr_branch_obs_test = curr_tree.list_node[l].obs_test;
-//       // n_test = curr_tree.list_node[l].obs_test.size();
-//
-//       // Updating train samples
-//       for(int i=0;i<n_train;i++){
-//         if(x_train.coeff(curr_branch_obs_train[i],leaf_bottom_var)<=leaf_bottom_rule){
-//           new_branch_left_train_index.push_back(curr_branch_obs_train[i]);
-//         } else {
-//           new_branch_right_train_index.push_back(curr_branch_obs_train[i]);
-//         }
-//       }
-//
-//       // Updating test samples
-//       // for(int i=0;i<n_test;i++){
-//       //   if(x_test.coeff(curr_branch_obs_test[i],leaf_bottom_var)<=leaf_bottom_rule){
-//       //     new_branch_left_test_index.push_back(curr_branch_obs_test[i]);
-//       //   } else {
-//       //     new_branch_right_test_index.push_back(curr_branch_obs_test[i]);
-//       //   }
-//       // }
-//
-//
-//       // Certifying that I will have only nodes with enough observations
-//       if(new_branch_right_train_index.size()>=n_min_size && new_branch_left_train_index.size()>=n_min_size){
-//         new_tree.list_node[new_tree.list_node[l].left].var = leaf_bottom_var;
-//         new_tree.list_node[new_tree.list_node[l].left].var_split = leaf_bottom_rule;
-//         new_tree.list_node[new_tree.list_node[l].right].var = leaf_bottom_var;
-//         new_tree.list_node[new_tree.list_node[l].right].var_split = leaf_bottom_rule;
-//
-//         // Replacing the left and right index
-//         new_tree.list_node[new_tree.list_node[l].left].obs_train = new_branch_left_train_index;
-//         new_tree.list_node[new_tree.list_node[l].right].obs_train = new_branch_right_train_index;
-//
-//         // Replacing the left and right index
-//         // new_tree.list_node[new_tree.list_node[l].left].obs_test = new_branch_left_test_index;
-//         // new_tree.list_node[new_tree.list_node[l].right].obs_test = new_branch_right_test_index;
-//
-//         accept_new_tree++;
-//       } else {
-//         *id_t = 1;
-//         return curr_tree; // Finish the VERB
-//       }
-//
-//
-//     }// Skipping for the bottom leaves nodes
-//   }
-//
-//
-//   for(int l=0; l<n_nodes;l++){
-//     if(curr_tree.list_node[l].index==child_swap_node_index){
-//
-//       curr_leaf_obs_train = new_tree.list_node[l].obs_train;
-//       n_train = new_tree.list_node[l].obs_train.size();
-//       // curr_leaf_obs_test = new_tree.list_node[l].obs_test;
-//       // n_test = new_tree.list_node[l].obs_test.size();
-//
-//       // Updating the nodes (train)
-//       for(int i=0;i<n_train;i++){
-//         if(x_train.coeff(curr_leaf_obs_train[i],branch_bottom_var)<=branch_bottom_rule){
-//           new_leaf_left_train_index.push_back(curr_leaf_obs_train[i]);
-//         } else {
-//           new_leaf_right_train_index.push_back(curr_leaf_obs_train[i]);
-//         }
-//       }
-//
-//
-//       // Updating the nodes (test)
-//       // for(int i=0;i<n_test;i++){
-//       //   if(x_test.coeff(curr_leaf_obs_test[i],branch_bottom_var)<=branch_bottom_rule){
-//       //     new_leaf_left_test_index.push_back(curr_leaf_obs_test[i]);
-//       //   } else {
-//       //     new_leaf_right_test_index.push_back(curr_leaf_obs_test[i]);
-//       //   }
-//       // }
-//
-//
-//
-//
-//       // Certifying that I will have only nodes with enough observations
-//       if(new_leaf_right_train_index.size()>=n_min_size && new_leaf_left_train_index.size()>=n_min_size){
-//         new_tree.list_node[new_tree.list_node[l].left].var = branch_bottom_var;
-//         new_tree.list_node[new_tree.list_node[l].left].var_split = branch_bottom_rule;
-//         new_tree.list_node[new_tree.list_node[l].right].var = branch_bottom_var;
-//         new_tree.list_node[new_tree.list_node[l].right].var_split = branch_bottom_rule;
-//
-//         // Replacing the left and right index
-//         new_tree.list_node[new_tree.list_node[l].left].obs_train = new_leaf_left_train_index;
-//         new_tree.list_node[new_tree.list_node[l].right].obs_train = new_leaf_right_train_index;
-//
-//         // Replacing the left and right index
-//         // new_tree.list_node[new_tree.list_node[l].left].obs_test = new_leaf_left_test_index;
-//         // new_tree.list_node[new_tree.list_node[l].right].obs_test = new_leaf_right_test_index;
-//
-//         accept_new_tree++;
-//       } else {
-//         *id_t = 1;
-//         return curr_tree; // Finish the VERB
-//       }
-//
-//     }
-//   }
-//
-//
-//   if(accept_new_tree==2){
-//     return new_tree;
-//   } else {
-//     *id_t = 1;
-//     return curr_tree;
-//   }
-//
-// }
-
 
 // [[Rcpp::depends(RcppEigen)]]
-double node_loglikelihood(Eigen::VectorXd residuals,
+double node_loglikelihood_bart(Eigen::VectorXd residuals,
                           node current_node,
                           double tau,
                           double tau_mu) {
@@ -1157,7 +562,7 @@ double node_loglikelihood(Eigen::VectorXd residuals,
 }
 
 // [[Rcpp::depends(RcppEigen)]]
-double tree_loglikelihood(Eigen::VectorXd residuals,
+double tree_loglikelihood_bart(Eigen::VectorXd residuals,
                           Tree curr_tree,
                           double tau,
                           double tau_mu
@@ -1170,7 +575,7 @@ double tree_loglikelihood(Eigen::VectorXd residuals,
 
 
   for(int i = 0; i<number_nodes; i++) {
-    loglike_sum+=node_loglikelihood(residuals,
+    loglike_sum+=node_loglikelihood_bart(residuals,
                                     terminal_nodes[i],tau,tau_mu);
   }
 
@@ -1186,11 +591,11 @@ double tree_loglikelihood_verb(Eigen::VectorXd residuals,
                                double tau,
                                double tau_mu){
   if(verb < 0.28){ // Grow prob
-    return (node_loglikelihood(residuals,new_tree.list_node[new_tree.list_node[verb_node_index].left],tau,tau_mu)+node_loglikelihood(residuals,new_tree.list_node[new_tree.list_node[verb_node_index].right],tau,tau_mu)) - node_loglikelihood(residuals,curr_tree.list_node[verb_node_index],tau,tau_mu);
+    return (node_loglikelihood_bart(residuals,new_tree.list_node[new_tree.list_node[verb_node_index].left],tau,tau_mu)+node_loglikelihood_bart(residuals,new_tree.list_node[new_tree.list_node[verb_node_index].right],tau,tau_mu)) - node_loglikelihood_bart(residuals,curr_tree.list_node[verb_node_index],tau,tau_mu);
   } else if( verb <= 0.56){ // Prune prob
-    return node_loglikelihood(residuals, curr_tree.list_node[verb_node_index],tau,tau_mu)-(node_loglikelihood(residuals, curr_tree.list_node[curr_tree.list_node[verb_node_index].left],tau,tau_mu)+node_loglikelihood(residuals, curr_tree.list_node[curr_tree.list_node[verb_node_index].right],tau,tau_mu));
+    return node_loglikelihood_bart(residuals, curr_tree.list_node[verb_node_index],tau,tau_mu)-(node_loglikelihood_bart(residuals, curr_tree.list_node[curr_tree.list_node[verb_node_index].left],tau,tau_mu)+node_loglikelihood_bart(residuals, curr_tree.list_node[curr_tree.list_node[verb_node_index].right],tau,tau_mu));
   } else { // Change case
-    return (node_loglikelihood(residuals,new_tree.list_node[new_tree.list_node[verb_node_index].left],tau,tau_mu)+node_loglikelihood(residuals,new_tree.list_node[new_tree.list_node[verb_node_index].right],tau,tau_mu))-(node_loglikelihood(residuals, curr_tree.list_node[curr_tree.list_node[verb_node_index].left],tau,tau_mu)+node_loglikelihood(residuals, curr_tree.list_node[curr_tree.list_node[verb_node_index].right],tau,tau_mu));
+    return (node_loglikelihood_bart(residuals,new_tree.list_node[new_tree.list_node[verb_node_index].left],tau,tau_mu)+node_loglikelihood_bart(residuals,new_tree.list_node[new_tree.list_node[verb_node_index].right],tau,tau_mu))-(node_loglikelihood_bart(residuals, curr_tree.list_node[curr_tree.list_node[verb_node_index].left],tau,tau_mu)+node_loglikelihood_bart(residuals, curr_tree.list_node[curr_tree.list_node[verb_node_index].right],tau,tau_mu));
   }
 
 }
@@ -1283,7 +688,7 @@ double update_tau(Eigen::VectorXd y,
 //
 //
 // [[Rcpp::depends(RcppEigen)]]
-void get_prediction_tree(Tree curr_tree,
+void get_prediction_tree_bart(Tree curr_tree,
                          Eigen::MatrixXd x_train,
                          Eigen::MatrixXd x_test,
                          Eigen::VectorXd &prediction_train,
@@ -1367,6 +772,207 @@ double log_transition_prob(Tree curr_tree,
   return log_prob;
 
 }
+
+
+//[[Rcpp::export]]
+gpb_Tree convert_tree
+
+
+//======== GP-BART FUNCTIONS============
+//[[Rcpp::export]]
+List gpbart(Eigen::MatrixXd x_train,
+            Eigen::VectorXd y,
+            Eigen::MatrixXd x_test,
+            int n_tree,
+            int n_mcmc,
+            int n_burn,
+            int n_min_size,
+            int n_bart_iter,
+            double tau, double mu,
+            double tau_mu, double naive_sigma,
+            double alpha, double beta){
+
+  // Defining the parameters from GP-BART
+  // GP-BART functions
+  vector<double> phi_vec;
+  double phi_init;
+  double nu;
+  double kappa;
+
+  // Declaring common variables
+  double verb;
+  double acceptance;
+  double log_transition_prob_obj;
+  double past_tau;
+  int post_counter = 0;
+  int id_t ,verb_node_index; // Id_t: Boolean to verify if the same tree was generated
+  bool bart_bool = true;
+  // Verb_node_index: Explicit the node the was used;
+
+  // Getting the number of observations
+  int n_train = x_train.rows();
+  int n_test = x_test.rows();
+
+  // Creating the variables
+  int n_post = (n_mcmc-n_burn);
+  Eigen::MatrixXd y_train_hat_post(n_post,n_train);
+  Eigen::MatrixXd y_test_hat_post(n_post,n_train);
+
+  NumericVector tau_post;
+
+  // Creating the initial values for omega, omega_plus_tau, and omega_plus_tau_inv
+  // Defining initial values for omega matrices
+  Eigen::MatrixXd i_omega,i_omega_plus_tau,i_omega_plus_tau_inv;
+
+
+  // Defining the matrices for the root node
+  i_omega = omega(x_train,phi_init,nu);
+  i_omega_plus_tau = omega_plus_tau(x_train,phi_init,nu,tau);
+  i_omega_plus_tau_inv = M_solve(i_omega_plus_tau);
+
+  // Initialize the new tree
+  Tree new_tree_bart(n_train,n_test);
+  gpb_Tree new_tree(n_train,n_test,i_omega,i_omega_plus_tau,i_omega_plus_tau_inv);
+
+  // Creating a vector of multiple trees
+  vector<Tree> current_trees_bart;
+  vector<gpb_Tree> current_trees;
+  for(int i = 0; i<n_tree;i++){
+    current_trees_bart.push_back(new_tree_bart);
+  }
+
+
+  // Creating a matrix of zeros of y_hat
+  y_train_hat_post.setZero(n_post,n_train);
+  y_test_hat_post.setZero(n_post,n_test);
+
+  // Creating the partial residuals and partial predictions
+  Eigen::VectorXd partial_pred,partial_residuals;
+  Eigen::VectorXd prediction_train,prediction_test; // Creating the vector only one prediction
+  Eigen::VectorXd prediction_test_sum;
+
+  // Initializing zero values
+  partial_pred.setZero(n_train);
+  partial_residuals.setZero(n_train);
+  prediction_train.setZero(n_train);
+  prediction_test.setZero(n_test);
+
+
+  // Iterating over all MCMC samples
+  for(int i=0;i<n_mcmc;i++){
+
+    prediction_test_sum.setZero(n_test);
+
+    if( i < n_bart_iter ){
+
+      // Using the new bart_bool
+      bart_bool = false;
+
+      // Converting the new trees
+      for(int j = 0; j<n_tree;j++){
+
+        current_trees[j] ;
+
+      }
+    }
+
+    if(bart_bool){
+
+        // Iterating over the trees
+        for(int t = 0; t<n_tree;t++){
+
+          // Initializing if store tree or not
+          id_t = 0;
+          // Updating the prediction tree and prediction test
+          get_prediction_tree_bart(current_trees_bart[t],x_train,x_test,prediction_train,prediction_test);
+
+          // Updating the residuals
+          partial_residuals = y - (partial_pred - prediction_train);
+
+          // Sampling a verb. In this case I will sample a double between 0 and 1
+          // Grow: 0-0.3
+          // Prune 0.3 - 0.6
+          // Change: 0.6 - 1.0
+          // Swap: Not in this current implementation
+          verb = R::runif(0,1);
+
+          // Forcing the first trees to grow
+          if(current_trees[t].list_node.size()==1 ){
+            verb = 0.1;
+          }
+
+          // Proposing a new tree
+          if(verb<=0.28){
+            new_tree_bart = grow_bart(current_trees_bart[t], x_train,x_test, n_min_size,&id_t,&verb_node_index);
+          } else if ( verb <= 0.56){
+            if(current_trees[t].list_node.size()>1){
+              new_tree_bart = prune_bart(current_trees_bart[t],&id_t,&verb_node_index);
+            }
+          } else if (verb <= 1){
+            new_tree_bart = change_bart(current_trees_bart[t],x_train,x_test,n_min_size,&id_t,&verb_node_index);
+          } else {
+            // new_tree = swap(current_trees[t],x_train,x_test,n_min_size);
+          }
+
+          // Calculating or not the likelihood (1 is for case where the trees are the same)
+          if(id_t == 0){
+
+            // No new tree is proposed (Jump log calculations)
+            if( (verb <=0.6) && (current_trees_bart[t].list_node.size()==new_tree.list_node.size())){
+              log_transition_prob_obj = 0;
+            } else {
+              log_transition_prob_obj = log_transition_prob(current_trees_bart[t],new_tree_bart,verb);
+
+            }
+
+            acceptance = tree_loglikelihood_verb(partial_residuals,new_tree_bart,current_trees_bart[t],verb,verb_node_index,tau, tau_mu) + tree_log_prior_verb(new_tree_bart,current_trees_bart[t],verb,alpha,beta)+ log_transition_prob_obj;
+
+            // Testing if will acceptance or not
+            if( (acceptance > 0) || (acceptance > -R::rexp(1))){
+              current_trees[t] = new_tree;
+            }
+
+          } // End the test likelihood calculating for same trees
+
+          // Generating new \mu values for the accepted (or not tree)
+          current_trees_bart[t] = update_mu(partial_residuals,current_trees_bart[t],tau,tau_mu);
+
+          // Updating the prediction train and prediction test with the sampled \mu values
+          get_prediction_tree_bart(current_trees_bart[t],x_train,x_test,prediction_train,prediction_test);
+
+          partial_pred = y + prediction_train - partial_residuals;
+          prediction_test_sum += prediction_test;
+
+        }
+
+    } else { // Begin for the GP-BART iterations
+
+    }
+    // Updating tau
+    past_tau = tau;
+    tau = update_tau(y,partial_pred,naive_sigma,past_tau);
+    // tau = update_tau_old(y,partial_pred,a_tau,d_tau);
+
+    // Updating the posterior matrix
+    if(i>=n_burn){
+      y_train_hat_post.row(post_counter) += partial_pred;
+      y_test_hat_post.row(post_counter) += prediction_test_sum;
+      //Updating tau
+      tau_post.push_back(tau);
+      post_counter++;
+    }
+
+  }
+
+  return Rcpp::List::create(_["y_train_hat_post"] = y_train_hat_post,
+                            _["y_test_hat_post"] = y_test_hat_post,
+                            _["tau_post"] = tau_post);
+
+}
+
+
+
+
 
 //[[Rcpp::export]]
 List bart(Eigen::MatrixXd x_train,

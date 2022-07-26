@@ -40,14 +40,6 @@ double fast_dmv(const Eigen::MatrixXd mu, const Eigen::MatrixXd M){
   return  -llt.matrixLLT().diagonal().array().log().sum() -0.5*MtM(llt.solve(mu))(0,0) -n*0.5*log(2*M_PI);
 }
 
-//
-//   Eigen::MatrixXd I =  Eigen::MatrixXd::Identity(n,n); // Creating a Identity matrix
-//   // return M.inverse(); // Solve the system Mx=I;
-//   return M.llt().solve(I);
-// }
-
-mean_matrix <-as.matrix(rep(0,nrow(x_matrix)))
-
 
 // Creating one sequence of values
 vector<int> seq_along(int n){
